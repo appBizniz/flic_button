@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
+import 'package:flic_button/callback_dispatcher.dart';
 import 'package:flutter/services.dart';
 
 enum Flic2ButtonConnectionState {
@@ -126,6 +128,8 @@ abstract class Flic2Listener {
 /// the plugin to handle Flic2 buttons
 class FlicButtonPlugin {
   static const String _channelName = 'flic_button';
+  static const String _channelBackgroundName = 'flic2_background_channel';
+
   static const String _methodNameInitialize = 'initializeFlic2';
   static const String _methodNameDispose = 'disposeFlic2';
   static const String _methodNameCallback = 'callListener';
@@ -142,6 +146,9 @@ class FlicButtonPlugin {
   static const String _methodNameDisconnectButton = "disconnectButton";
   static const String _methodNameForgetButton = "forgetButton";
 
+  static const String _methodNamePromoteToForeground = "promoteToForeground";
+  static const String _methodNameDemoteToBackground = "demoteToBackground";
+
   static const String ERROR_CRITICAL = 'CRITICAL';
   static const String ERROR_NOT_STARTED = 'NOT_STARTED';
   static const String ERROR_ALREADY_STARTED = 'ALREADY_STARTED';
@@ -157,7 +164,8 @@ class FlicButtonPlugin {
   static const int METHOD_FLIC2_ERROR = 200;
 
   static const MethodChannel _channel = const MethodChannel(_channelName);
-
+  static const MethodChannel _background =
+      const MethodChannel(_channelBackgroundName);
   Future<bool?>? _invokationFuture;
 
   final Flic2Listener flic2listener;
@@ -167,13 +175,33 @@ class FlicButtonPlugin {
     // initialized
     _channel.setMethodCallHandler(_methodCallHandler);
     // an invoke the function to initialise the handling of Flic 2
-    _invokationFuture = _channel.invokeMethod<bool>(_methodNameInitialize);
+
+    final CallbackHandle callback =
+        PluginUtilities.getCallbackHandle(callbackDispatcher)!;
+
+    _invokationFuture = _channel.invokeMethod<bool>(
+        _methodNameInitialize, <dynamic>[callback.toRawHandle()]);
   }
 
   /// accessor to get the invokation future so your UI can wait till it's running properly
   Future<bool?>? get invokation {
     return _invokationFuture;
   }
+
+  /// Promote the geofencing service to a foreground service.
+  ///
+  /// Will throw an exception if called anywhere except for a geofencing
+  /// callback.
+  static Future<void> promoteToForeground() async =>
+      await _background.invokeMethod(_methodNamePromoteToForeground);
+
+  /// Demote the geofencing service from a foreground service to a background
+  /// service.
+  ///
+  /// Will throw an exception if called anywhere except for a geofencing
+  /// callback.
+  static Future<void> demoteToBackground() async =>
+      await _background.invokeMethod(_methodNameDemoteToBackground);
 
   /// dispose of this plugin to shut it all down (iOS doesn't at the moment)
   Future<bool?> disposeFlic2() async {
@@ -194,9 +222,17 @@ class FlicButtonPlugin {
   }
 
   /// connect a button for use
-  Future<bool?> connectButton(String buttonUuid) async {
+  Future<bool?> connectButton(
+      String buttonUuid,
+      void Function(
+    String uuid,
+  )
+          callback) async {
     // connect this button then please
-    return _channel.invokeMethod<bool>(_methodNameConnectButton, [buttonUuid]);
+    return _channel.invokeMethod<bool>(_methodNameConnectButton, [
+      buttonUuid,
+      PluginUtilities.getCallbackHandle(callback)!.toRawHandle()
+    ]);
   }
 
   /// disconnect a button to stop using

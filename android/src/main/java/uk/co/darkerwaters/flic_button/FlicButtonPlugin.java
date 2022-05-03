@@ -18,9 +18,13 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 
+import io.flutter.embedding.engine.plugins.activity.ActivityAware;
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 /** FlicButtonPlugin */
-public class FlicButtonPlugin implements FlutterPlugin, MethodCallHandler {
+public class FlicButtonPlugin implements FlutterPlugin, MethodCallHandler,ActivityAware {
   public static final String channelName = "flic_button";
+  public static final String channelBackgroundName = "flic2_background_channel";
+
   public static final String methodNameInitialise = "initializeFlic2";
   public static final String methodNameDispose = "disposeFlic2";
   public static final String methodNameCallback = "callListener";
@@ -62,6 +66,8 @@ public class FlicButtonPlugin implements FlutterPlugin, MethodCallHandler {
   private Flic2Controller flic2Controller = null;
 
   private Context context = null;
+  private Activity mActivity = null;
+
 
   @Override
   public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
@@ -70,16 +76,39 @@ public class FlicButtonPlugin implements FlutterPlugin, MethodCallHandler {
     // we will need the application context later for when they start the service or whatever
     this.context = flutterPluginBinding.getApplicationContext();
   }
+  
 
   @Override
   public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
     channel.setMethodCallHandler(null);
+    this.context = null;
     // and shutdown anything else started
     if (null != this.flic2Controller) {
       this.flic2Controller.releaseFlic();
       this.flic2Controller = null;
     }
   }
+
+  @Override
+  public void onAttachedToActivity(ActivityPluginBinding binding) {
+    mActivity = binding.getActivity();
+  }
+
+  @Override
+  public void onDetachedFromActivity() {
+    mActivity = null;
+  }
+
+  @Override
+  public void onDetachedFromActivityForConfigChanges() {
+    mActivity = null;
+  }
+
+  @Override
+  public void onReattachedToActivityForConfigChanges(ActivityPluginBinding binding) {
+    mActivity = binding.getActivity();
+  }
+  
 
   private String extractStringArgument(String functionName, String paramName, Object arguments, @NonNull final Result result) {
     String toReturn = null;
@@ -134,6 +163,13 @@ public class FlicButtonPlugin implements FlutterPlugin, MethodCallHandler {
   @Override
   public void onMethodCall(@NonNull MethodCall call, @NonNull final Result result) {
     if (call.method.equals(methodNameInitialise)) {
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        mActivity.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION), 12312);
+      } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        mActivity.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 12312);
+      }
+
       // this is easy - start Flic
       if (null != this.flic2Controller) {
         // already started
@@ -143,6 +179,8 @@ public class FlicButtonPlugin implements FlutterPlugin, MethodCallHandler {
       } else {
         // start Flic 2 then
         this.flic2Controller = new Flic2Controller(context, flic2Callback);
+        initializeService(mContext, args);
+
         result.success(true);
       }
     }

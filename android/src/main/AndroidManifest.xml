@@ -5,5 +5,10 @@
 
     <application>
         <service android:name="uk.co.darkerwaters.flic_button.ControlService" />
+        <service
+          android:name="uk.co.darkerwaters.flic_button.Flic2Service"
+          android:enabled="true"
+          android:exported="false">
+      </service>
     </application>
 </manifest>
